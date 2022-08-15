@@ -1,0 +1,35 @@
+menuconfig BMP581
+	bool "BMP581"
+	depends on I2C && GPIO
+	help
+	  Enable BMP581 altitude sensor
+
+config BMP581_TRIGGER
+	bool "Trigger"
+	depends on BMP581
+	help
+	  Enables data ready interrupt to fetch the data
+# if BMP581
+
+# choice
+# 	prompt "Trigger mode"
+# 	default BMP581_TRIGGER_GLOBAL_THREAD
+# 	help
+# 	  Specify the type of triggering to be used by the driver.
+
+# config BMP581_TRIGGER_NONE
+# 	bool "No trigger"
+
+# config BMP581_TRIGGER_GLOBAL_THREAD
+# 	bool "Use global thread"
+# 	select BMP581_TRIGGER
+
+# config BMP581_TRIGGER_OWN_THREAD
+# 	bool "Use own thread"
+# 	select BMP581_TRIGGER
+# endchoice
+
+# config BMP581_TRIGGER
+# 	bool
+
+# endif # BMP581

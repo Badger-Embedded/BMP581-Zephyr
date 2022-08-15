@@ -1,0 +1,3 @@
+zephyr_library()
+zephyr_library_sources(bmp581.c)
+zephyr_library_sources_ifdef(CONFIG_BMP581_TRIGGER bmp581_trigger.c)
