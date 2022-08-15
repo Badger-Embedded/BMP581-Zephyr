@@ -12,7 +12,7 @@ int bmp581_trigger_set(const struct device *dev,
 		       sensor_trigger_handler_t handler)
 {
     int ret = -ENOTSUP;
-    struct bmp581_data *drv = dev->data;
+    struct bmp581_data* drv = (struct bmp581_data *) dev->data;
     uint8_t int_source = 0;
 
     switch(trig->type)
