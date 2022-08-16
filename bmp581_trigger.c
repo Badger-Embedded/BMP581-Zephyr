@@ -46,7 +46,7 @@ static void bmp581_handle_int(struct bmp581_data* drv)
     {
         struct sensor_trigger drdy_trig = {
             .type = SENSOR_TRIG_DATA_READY,
-            .chan = SENSOR_CHAN_PRESS,
+            .chan = SENSOR_CHAN_ALL,
         };
         drv->drdy_handler(drv->dev, &drdy_trig);
     }
@@ -73,8 +73,8 @@ static void bmg160_gpio_callback(const struct device *port,
 static inline int setup_int(const struct device *dev,
 			      bool enable)
 {
-	struct bmp581_data *data = dev->data;
-	const struct bmp581_config *const cfg = dev->config;
+	struct bmp581_data* data = (struct bmp581_data *) dev->data;
+	const struct bmp581_config *const cfg = (const struct bmp581_config* const) dev->config;
 
 	return gpio_pin_interrupt_configure(data->gpio,
 					    cfg->input.pin,
@@ -85,8 +85,8 @@ static inline int setup_int(const struct device *dev,
 
 int bmp581_trigger_init(const struct device *dev)
 {
-    const struct bmp581_config* cfg = dev->config;
-    struct bmp581_data* drv = dev->data;
+    const struct bmp581_config* cfg = (const struct bmp581_config*) dev->config;
+    struct bmp581_data* drv = (struct bmp581_data*) dev->data;
     int ret = BMP5_OK;
 
     uint8_t int_source = 0;
