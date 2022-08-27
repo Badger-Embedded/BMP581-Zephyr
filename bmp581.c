@@ -16,7 +16,7 @@
 LOG_MODULE_REGISTER(bmp581, CONFIG_SENSOR_LOG_LEVEL);
 
 #if DT_NUM_INST_STATUS_OKAY(DT_DRV_COMPAT) == 0
-#warning "BME280 driver enabled without any devices"
+#warning "BMP581 driver enabled without any devices"
 #endif
 
 static int power_up_check(struct bmp581_data* drv);
@@ -86,7 +86,7 @@ static int set_power_mode(enum bmp5_powermode powermode, struct bmp581_data* drv
 		case BMP5_POWERMODE_FORCED:
 		case BMP5_POWERMODE_CONTINOUS:
 			odr = BMP5_SET_BITSLICE(odr, BMP5_DEEP_DISABLE, BMP5_DEEP_DISABLED);
-			odr = BMP5_SET_BITS_POS_0(odr, BMP5_POWERMODE, BMP5_POWERMODE_STANDBY);
+			odr = BMP5_SET_BITS_POS_0(odr, BMP5_POWERMODE, powermode);
 			ret = reg_write(BMP5_REG_ODR_CONFIG, &odr, 1, drv);
 			break;
 		default:
@@ -172,20 +172,7 @@ static int power_up_check(struct bmp581_data* drv) {
         /* Check if nvm_rdy status = 1 and nvm_err status = 0 to proceed */
         if ( (nvm_status & BMP5_INT_NVM_RDY) && ( !(nvm_status & BMP5_INT_NVM_ERR) ) )
 		{
-            rslt = get_interrupt_status(&por_status, drv);
-
-            if (rslt == BMP5_OK)
-			{
-                /* Check if por/soft-reset complete status = 1 to proceed */
-                if (por_status & BMP5_INT_ASSERTED_POR_SOFTRESET_COMPLETE)
-				{
-                    rslt = BMP5_OK;
-                }
-				else
-				{
-                    rslt = BMP5_E_POWER_UP;
-                }
-            }
+            rslt = BMP5_OK;
         }
 		else
 		{
@@ -313,6 +300,7 @@ static int set_osr_config(const struct sensor_value* osr, enum sensor_channel ch
 			if (ret == BMP5_OK)
 			{
 				ret = reg_write(BMP5_REG_OSR_CONFIG, &osr_val, 1, drv);
+				get_osr_odr_press_config(&drv->osr_odr_press_config, drv);
 			}
 		}
 	}
@@ -329,7 +317,15 @@ static int set_odr_config(const struct sensor_value* odr, struct bmp581_data* dr
 	int ret = 0;
 	if (odr != NULL)
 	{
-		ret = reg_write(BMP5_REG_ODR_CONFIG, (const uint8_t*) &odr->val1, 1, drv);
+		uint8_t odr_val = 0;
+		ret = reg_read(BMP5_REG_ODR_CONFIG, &odr_val, 1, drv);
+		if (ret != BMP5_OK)
+		{
+			return ret;
+		}
+		odr_val = BMP5_SET_BITSLICE(odr_val, BMP5_ODR, odr->val1);
+		ret = reg_write(BMP5_REG_ODR_CONFIG, (const uint8_t*) &odr_val, 1, drv);
+		get_osr_odr_press_config(&drv->osr_odr_press_config, drv);
 	}
 	else
 	{
@@ -346,6 +342,7 @@ static int soft_reset(struct bmp581_data* drv)
 	uint8_t int_status = 0;
 
 	ret = reg_write(BMP5_REG_CMD, &reset_cmd, 1, drv);
+
 	if (ret == BMP5_OK)
 	{
 		k_usleep(BMP5_DELAY_US_SOFT_RESET);
@@ -512,7 +509,7 @@ static int set_iir_config(const struct sensor_value* iir, struct bmp581_data* dr
 static int bmp581_attr_set(const struct device *dev, enum sensor_channel chan,
 			   enum sensor_attribute attr, const struct sensor_value *val)
 {
-	struct bmp581_data* drv = dev->data;
+	struct bmp581_data* drv = (struct bmp581_data*) dev->data;
 	int ret = -ENOTSUP;
 	switch((int) attr)
 	{
@@ -521,6 +518,12 @@ static int bmp581_attr_set(const struct device *dev, enum sensor_channel chan,
 			break;
 		case SENSOR_ATTR_OVERSAMPLING:
 			ret = set_osr_config(val, chan, drv);
+			break;
+		case BMP5_ATTR_POWER_MODE:
+			{
+				enum bmp5_powermode powermode = (enum bmp5_powermode) val->val1;
+				ret = set_power_mode(powermode, drv);
+			}
 			break;
 		case BMP5_ATTR_IIR_CONFIG:
 			ret = set_iir_config(val, drv);
@@ -545,10 +548,10 @@ static int bmp581_init(const struct device *dev)
 	memset(&drv->osr_odr_press_config, 0, sizeof(drv->osr_odr_press_config));
 	memset(&drv->last_sample, 0, sizeof(drv->last_sample));
 
-	drv->i2c = device_get_binding(cfg->i2c_master_name);
+	drv->i2c = cfg->i2c.bus;
 	if (drv->i2c == NULL)
 	{
-		LOG_ERR("Could not get pointer to %s device", cfg->i2c_master_name);
+		LOG_ERR("Could not get pointer to i2c device");
 		return -EINVAL;
 	}
 
@@ -576,7 +579,12 @@ static int bmp581_init(const struct device *dev)
 			else
 			{
 				#ifdef CONFIG_BMP581_TRIGGER
-					bmp581_trigger_init(dev);
+				ret = bmp581_trigger_init(dev);
+				if (ret != BMP5_OK)
+				{
+					LOG_ERR("Unable to initialize trigger for BMP581");
+					return ret;
+				}
 				#endif
 			}
 		}
@@ -586,7 +594,6 @@ static int bmp581_init(const struct device *dev)
 			drv->chip_id, BMP5_CHIP_ID_PRIM, BMP5_CHIP_ID_SEC);
 		return BMP5_E_INVALID_CHIP_ID;
 	}
-
 	return ret;
 }
 
@@ -599,15 +606,23 @@ static const struct sensor_driver_api bmp581_driver_api = {
 	.attr_set = bmp581_attr_set
 };
 
-
-#define BMP581_INIT(i)						       \
-	static struct bmp581_data bmp581_data_##i;	       \
-									       \
+#ifdef CONFIG_BMP581_TRIGGER
+#define BMP581_CONFIG(i)	\
 	static const struct bmp581_config bmp581_config_##i = { \
-		.i2c_master_name = DEVICE_DT_GET(DT_INST_BUS(i)),	       \
+		.i2c = DEVICE_DT_GET(DT_INST_BUS(i)),	       \
 		.i2c_addr = DT_INST_REG_ADDR(i),		       \
 		.input = GPIO_DT_SPEC_INST_GET(i, int_gpios), \
-	};							       \
+	}
+#else
+#define BMP581_CONFIG(i)	\
+	static const struct bmp581_config bmp581_config_##i = { \
+		.i2c = DEVICE_DT_GET(DT_INST_BUS(i)),	       \
+		.i2c_addr = DT_INST_REG_ADDR(i),		       \
+	}
+#endif
+#define BMP581_INIT(i)						       \
+	static struct bmp581_data bmp581_data_##i;	       \
+	BMP581_CONFIG(i);	\
 									       \
 	DEVICE_DT_INST_DEFINE(i, bmp581_init, NULL,		       \
 			      &bmp581_data_##i,			       \

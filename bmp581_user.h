@@ -75,7 +75,8 @@
 /* Custom ATTR values */
 
 /* This is used to enable IIR config, keep in mind that disabling IIR back in runtime is not supported yet */
-#define BMP5_ATTR_IIR_CONFIG                      (SENSOR_ATTR_COMMON_COUNT + 1u)
+#define BMP5_ATTR_IIR_CONFIG                      (SENSOR_ATTR_PRIV_START + 1u)
+#define BMP5_ATTR_POWER_MODE                      (SENSOR_ATTR_PRIV_START + 2u)
 
 enum bmp5_powermode {
     /*! Standby powermode */

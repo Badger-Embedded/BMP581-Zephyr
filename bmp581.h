@@ -12,6 +12,7 @@
 #ifndef ZEPHYR_DRIVERS_SENSOR_BMP581_BMP581_H_
 #define ZEPHYR_DRIVERS_SENSOR_BMP581_BMP581_H_
 
+#include <zephyr/drivers/i2c.h>
 #include <zephyr/drivers/gpio.h>
 #include <zephyr/drivers/sensor.h>
 #include <zephyr/types.h>
@@ -325,7 +326,7 @@ struct bmp581_data {
 	const struct device* i2c;
 #ifdef CONFIG_BMP581_TRIGGER
     const struct device* dev;
-	const struct device* gpio;
+	struct gpio_dt_spec gpio;
 	struct gpio_callback gpio_cb;
     struct k_work work;
     sensor_trigger_handler_t drdy_handler;
@@ -337,7 +338,7 @@ struct bmp581_data {
 };
 
 struct bmp581_config {
-	const char *i2c_master_name;
+	struct i2c_dt_spec i2c;
 	uint16_t i2c_addr;
 #ifdef CONFIG_BMP581_TRIGGER
     struct gpio_dt_spec input;

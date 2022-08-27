@@ -5,7 +5,7 @@
 #include "bmp581.h"
 
 
-LOG_MODULE_DECLARE(BMP581, CONFIG_SENSOR_LOG_LEVEL);
+LOG_MODULE_REGISTER(bmp581_trigger, CONFIG_SENSOR_LOG_LEVEL);
 
 int bmp581_trigger_set(const struct device *dev,
 		       const struct sensor_trigger *trig,
@@ -18,6 +18,7 @@ int bmp581_trigger_set(const struct device *dev,
     switch(trig->type)
     {
         case SENSOR_TRIG_DATA_READY:
+            ret = reg_read(BMP5_REG_INT_SOURCE, &int_source, 1, drv);
             int_source = BMP5_SET_BITS_POS_0(int_source, BMP5_INT_DRDY_EN, BMP5_ENABLE);
             ret = reg_write(BMP5_REG_INT_SOURCE, &int_source, 1, drv);
             drv->drdy_handler = handler;
@@ -58,7 +59,7 @@ static void bmp581_work_cb(struct k_work *work)
 	bmp581_handle_int(drv);
 }
 
-static void bmg160_gpio_callback(const struct device *port,
+static void bmp581_gpio_callback(const struct device *port,
 				 struct gpio_callback *cb,
 				 uint32_t pin)
 {
@@ -70,18 +71,6 @@ static void bmg160_gpio_callback(const struct device *port,
 	k_work_submit(&drv->work);
 }
 
-static inline int setup_int(const struct device *dev,
-			      bool enable)
-{
-	struct bmp581_data* data = (struct bmp581_data *) dev->data;
-	const struct bmp581_config *const cfg = (const struct bmp581_config* const) dev->config;
-
-	return gpio_pin_interrupt_configure(data->gpio,
-					    cfg->input.pin,
-					    enable
-					    ? GPIO_INT_EDGE_TO_ACTIVE
-					    : GPIO_INT_DISABLE);
-}
 
 int bmp581_trigger_init(const struct device *dev)
 {
@@ -107,11 +96,10 @@ int bmp581_trigger_init(const struct device *dev)
             if (ret == BMP5_OK)
             {
                 /* Step 3 : Set the desired mode in INT_CONFIG.int_mode */
-                int_config = BMP5_SET_BITS_POS_0(int_config, BMP5_INT_MODE, BMP5_INT_MODE_LATCHED);
-                int_config = BMP5_SET_BITSLICE(int_config, BMP5_INT_POL, BMP5_INT_POL_ACTIVE_HIGH);
-                int_config = BMP5_SET_BITSLICE(int_config, BMP5_INT_OD, BMP5_INT_OD_PUSHPULL);
+                int_config = BMP5_SET_BITS_POS_0(int_config, BMP5_INT_MODE, BMP5_INT_MODE_PULSED);
+                int_config = BMP5_SET_BITSLICE(int_config, BMP5_INT_POL, BMP5_INT_POL_ACTIVE_LOW);
+                int_config = BMP5_SET_BITSLICE(int_config, BMP5_INT_OD, BMP5_INT_OD_OPENDRAIN);
                 int_config = BMP5_SET_BITSLICE(int_config, BMP5_INT_EN, BMP5_ENABLE);
-
                 /* Finally transfer the interrupt configurations */
                 ret = reg_write(BMP5_REG_INT_CONFIG, &int_config, 1, drv);
 
@@ -125,26 +113,28 @@ int bmp581_trigger_init(const struct device *dev)
 		return ret;
     }
 
-    drv->gpio = device_get_binding((char *)cfg->input.port);
-	if (!drv->gpio) {
-		LOG_DBG("Gpio controller %s not found", cfg->input.port);
+    drv->gpio = cfg->input;
+	if (!drv->gpio.port) {
+		LOG_DBG("Gpio controller not found");
 		return -EINVAL;
 	}
 
     drv->dev = dev;
     drv->work.handler = bmp581_work_cb;
 
-    ret = gpio_pin_configure(drv->gpio, cfg->input.pin, cfg->input.dt_flags | GPIO_INT_EDGE_TO_ACTIVE);
+
+    ret = gpio_pin_configure_dt(&drv->gpio, (drv->gpio.dt_flags | GPIO_INPUT));
+    ret = gpio_pin_interrupt_configure_dt(&drv->gpio, GPIO_INT_EDGE_TO_ACTIVE);
 	if (ret < 0) {
 		return ret;
 	}
 
-    gpio_init_callback(&drv->gpio_cb, bmg160_gpio_callback, BIT(cfg->input.pin));
+    gpio_init_callback(&drv->gpio_cb, bmp581_gpio_callback, BIT(cfg->input.pin));
 
-    ret = gpio_add_callback(drv->gpio, &drv->gpio_cb);
+    ret = gpio_add_callback(drv->gpio.port, &drv->gpio_cb);
 	if (ret < 0) {
 		return ret;
 	}
 
-    return setup_int(dev, true);
+    return ret;
 }
