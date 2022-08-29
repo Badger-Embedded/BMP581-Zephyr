@@ -432,15 +432,11 @@ static int bmp581_channel_get(const struct device *dev,
 		}
 		case SENSOR_CHAN_PRESS:
 			// returns pressure in Pa
-			val->val1 = (int32_t) drv->last_sample.pressure;
-			val->val2 = ( (int32_t)(drv->last_sample.pressure * FIXED_PRECISION_COEFFICIENT)
-									% FIXED_PRECISION_COEFFICIENT);
+			sensor_value_from_double(val, drv->last_sample.pressure);
 			return BMP5_OK;
 		case SENSOR_CHAN_AMBIENT_TEMP:
 			// returns temperature in Celcius
-			val->val1 = (int32_t) drv->last_sample.temperature;
-			val->val2 = ( (int32_t)(drv->last_sample.temperature * FIXED_PRECISION_COEFFICIENT)
-									% FIXED_PRECISION_COEFFICIENT);
+			sensor_value_from_double(val, drv->last_sample.temperature);
 			return BMP5_OK;
 		default:
 			return -ENOTSUP;
