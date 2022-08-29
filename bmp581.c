@@ -164,7 +164,6 @@ static int get_power_mode(enum bmp5_powermode *powermode, struct bmp581_data* dr
 static int power_up_check(struct bmp581_data* drv) {
 	int8_t rslt = 0;
     uint8_t nvm_status = 0;
-    uint8_t por_status = 0;
 
     rslt = get_nvm_status(&nvm_status, drv);
 
@@ -377,7 +376,7 @@ static int soft_reset(struct bmp581_data* drv)
 static int bmp581_sample_fetch(const struct device *dev,
 				      enum sensor_channel chan)
 {
-	struct bmp581_data *drv = dev->data;
+	struct bmp581_data* drv = (struct bmp581_data*) dev->data;
 	uint8_t data[6];
 	int ret = 0;
 
@@ -413,7 +412,7 @@ static int bmp581_channel_get(const struct device *dev,
 				     struct sensor_value *val)
 {
 	static const uint8_t FIXED_PRECISION_COEFFICIENT = 100; // must be power of 10
-	struct bmp581_data* drv = dev->data;
+	struct bmp581_data* drv = (struct bmp581_data*) dev->data;
 
 	if (val == NULL)
 	{
@@ -539,8 +538,8 @@ static int bmp581_attr_set(const struct device *dev, enum sensor_channel chan,
 
 static int bmp581_init(const struct device *dev)
 {
-	const struct bmp581_config *cfg = dev->config;
-	struct bmp581_data *drv = dev->data;
+	const struct bmp581_config* cfg = (struct bmp581_config*) dev->config;
+	struct bmp581_data* drv = (struct bmp581_data*) dev->data;
 	int ret = -1;
 
 	// Reset the chip id.
